@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<drjava version="drjava-20160913-225446">
+  <project autorefresh="false" build="build/classes/" root="" work="">
+    <createjar file=""/>
+    <source>
+      <file active="true" name="src/main/java/map/Application.java" package="map" timestamp="06-Nov-2018 23:37:41">
+        <select from="202" to="202"/>
+        <scroll column="0" row="0"/>
+      </file>
+      <file name="src/main/java/qm/QueueManager.java" package="qm" timestamp="06-Nov-2018 00:08:30">
+        <select from="202" to="202"/>
+        <scroll column="0" row="0"/>
+      </file>
+      <file name="src/main/java/map/Lab2.java" package="map" timestamp="15-Sep-2018 18:24:25">
+        <select from="202" to="202"/>
+        <scroll column="0" row="0"/>
+      </file>
+      <file name="src/main/java/map/WsPacket.java" package="map" timestamp="15-Sep-2018 18:24:25">
+        <select from="202" to="202"/>
+        <scroll column="0" row="0"/>
+      </file>
+      <file name="src/main/java/map/Lab1.java" package="map" timestamp="06-Nov-2018 23:19:17">
+        <select from="202" to="202"/>
+        <scroll column="0" row="0"/>
+      </file>
+    </source>
+    <included/>
+    <excluded/>
+    <collapsed/>
+    <classpath/>
+    <breakpoints/>
+    <watches/>
+    <bookmarks/>
+    <preferences/>
+  </project>
+</drjava>

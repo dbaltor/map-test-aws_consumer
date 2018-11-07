@@ -1,0 +1,45 @@
+package map;
+
+import software.amazon.awssdk.services.sqs.model.Message;
+import qm.QueueManager;
+
+import java.util.List;
+import static java.util.stream.Collectors.*;
+
+import org.springframework.web.socket.WebSocketSession;
+
+class Lab1 extends Thread {
+  String inputQueue;
+  WebSocketSession session;
+  
+  public Lab1(WebSocketSession session, String inputQueue) {
+    super();
+    this.session = session;
+    this.inputQueue = inputQueue;
+    this.start();
+  }
+  
+  public void run() {
+    List<Message> msgs;
+    while(true){
+      // Poll the queue waiting for coordinates
+      msgs = QueueManager.get(inputQueue); 
+      if (msgs.isEmpty()) {
+        continue;
+      }
+      // Get lines from messages received
+      String lines = msgs.stream()
+      .map(Message::body)
+//      .peek(System.out::println)
+      .collect(joining("\n"));
+      
+      // Split lines from the string and send them one by one
+      for(String line: lines.split("\n")){
+        if (!WsPacket.send(session, "m1," + line)){
+          System.out.println("Lab 1 finished. Socket " + session.getId() + " closed!");
+          return; 
+        }
+      }
+    }
+  }
+}
