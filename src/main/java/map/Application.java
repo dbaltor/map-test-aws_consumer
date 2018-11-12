@@ -33,7 +33,7 @@ public class Application {
   
     private static final String HEATMAP_QUEUE_URL = "https://sqs.eu-west-2.amazonaws.com/556385395922/heatmap-queue";
     private static final String HEATMAP_SUPPLIER_URL = "https://sqs.eu-west-2.amazonaws.com/556385395922/heatmap-supplier";      
-    private static final String LOCATION_FILE = "./files/realtimelocation.csv";
+    private static final String DEFAULT_LOCATION_FILE = "./files/realtimelocation.csv";
     private static String lab;
     private static String[] args;
     
@@ -46,6 +46,8 @@ public class Application {
         // start a thread to handle lab 1 messages received
         new Thread(() -> {
           List<Message> msgs;
+          
+          System.out.println("Heatspots will be read from the queue: " + HEATMAP_QUEUE_URL);
           while(true){
             // Poll the queue waiting for coordinates
             msgs = QueueManager.get(HEATMAP_QUEUE_URL); 
@@ -79,17 +81,13 @@ public class Application {
           switch(lab) {
             case "1":
               System.out.println("Lab 1 selected");
-              System.out.println("Will read heatspots from the queue: " + HEATMAP_QUEUE_URL);
               break;
             case "2":
               System.out.println("Lab 2 selected");
-              System.out.println("Will read vehicles' locations from the file: " + LOCATION_FILE);
               break;
             default:
               lab = DEFAULT_LAB; 
               System.out.println("Labs 1 and 2 selected");
-              System.out.println("Will read heatspots from the queue: " + HEATMAP_QUEUE_URL);
-              System.out.println("Will read vehicles' locations from the file: " + LOCATION_FILE);              
           }
 
         };
@@ -121,7 +119,7 @@ public class Application {
           }          
         }
         if (lab.equals("2") || lab.equals("both")) {
-          new Lab2(session, args, LOCATION_FILE);
+          new Lab2(session, args, DEFAULT_LOCATION_FILE);
         }  
       }
     }

@@ -13,7 +13,6 @@ class Lab2 extends Thread {
    int refreshRate;
    WebSocketSession session;
    String filename;
-   Thread t;
    
    public Lab2(WebSocketSession s, String[] args, String pfn) {
      super();
@@ -53,13 +52,9 @@ class Lab2 extends Thread {
      
      try( BufferedReader br = new BufferedReader(new FileReader(filename)) ) {
        for(String line; (line = br.readLine()) != null; ) {
-         if (Thread.interrupted()) {
-           return;
-         }         
          if (line.equals("")){
            continue;
          }
-
          String[] msg = line.split(",");
          String time = msg[0];
          String vehicle = msg[1];
@@ -82,7 +77,9 @@ class Lab2 extends Thread {
            // MAX_VEHICLES not exceeded 
            if (vehicles_to_send > 0) {
              // send message
-             WsPacket.send(session, msg2send);
+             if (!WsPacket.send(session, msg2send)) {
+               return; // socket closed!
+             }
              // decrement vehicles to send
              vehicles_to_send--;
              // record the time
@@ -101,11 +98,13 @@ class Lab2 extends Thread {
              // reset counter
              vehicles_to_send = maxVehicles;      
              // send message
-             WsPacket.send(session, msg2send);
+             if (!WsPacket.send(session, msg2send)){
+               System.out.println("Lab 2 finished. Socket " + session.getId() + " closed!");
+               return;
+             }
              //decrement vehicles to send
              vehicles_to_send--;
            }
-
          }
        }
      }

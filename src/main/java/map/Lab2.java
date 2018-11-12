@@ -14,10 +14,10 @@ class Lab2 extends Thread {
    WebSocketSession session;
    String filename;
    
-   public Lab2(WebSocketSession s, String[] args, String pfn) {
+   public Lab2(WebSocketSession s, String[] args, final String DEFAULT_LOCATION_FILE) {
      super();
      session = s;
-     filename = pfn;
+     filename = DEFAULT_LOCATION_FILE;
      
      // Number of vehicles to track
      try { 
@@ -38,6 +38,10 @@ class Lab2 extends Thread {
        System.out.println("'" + args[2] + "' is not a valid integer number! Using the default value: " + DEFAULT_REFRESH_RATE); 
      } 
      System.out.println("Vehicles real refresh rate = " + refreshRate);
+     
+     // Filename
+     filename = (args.length > 3) ? args[3] : DEFAULT_LOCATION_FILE;
+     System.out.println("Reading vehicles' locations from the file: " + filename);      
           
      // start a thread for this lab
      this.start();
