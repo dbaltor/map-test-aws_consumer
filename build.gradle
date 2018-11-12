@@ -27,7 +27,7 @@ dependencyManagement {
 }
 
 bootJar {
-    baseName = 'heatmap-aws'
+    baseName = 'heatmap-aws_consumer'
     version =  '1.0.0'
 }
 

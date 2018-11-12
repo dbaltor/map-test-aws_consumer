@@ -47,9 +47,6 @@ public class QueueManager {
     // Build a SQS service client
     return SqsClient.builder()
       .region(Region.EU_WEST_2)
-      .credentialsProvider(ProfileCredentialsProvider.builder()
-                             .profileName("default")
-                             .build())
       .build();      
   }
   public static String put(String queueUrl, String messageBody) throws Exception{

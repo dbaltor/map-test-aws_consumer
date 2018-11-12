@@ -14,8 +14,6 @@ import java.util.*;
 
 public class QueueManager {
   
-  public static final String QUIT = "quit";
-  
   private static final String TEST_QUEUE_URL = "https://sqs.eu-west-2.amazonaws.com/556385395922/test-sqs";
 
   public static void main(String[] args) {
