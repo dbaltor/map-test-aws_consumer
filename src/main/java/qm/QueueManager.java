@@ -21,9 +21,8 @@ import java.util.*;
 \************************************************************************/
 public class QueueManager {
   
-//  private static final String TEST_QUEUE_URL = "https://sqs.eu-west-2.amazonaws.com/556385395922/test-sqs";
   private static final String TEST_QUEUE_NAME = "test-queue-" + System.currentTimeMillis();
-  
+  private static final String DLQ_ARN = "arn:aws:sqs:eu-west-2:556385395922:heatmap-dlq";
 
   /**
    * The class runs a set of integration tests when executed standalone.
@@ -36,10 +35,11 @@ public class QueueManager {
     Scanner sc = new Scanner(System.in);
     String testQueueURL = "";
     System.out.println("Testing QueueManager...");
+    System.out.println("Using Dead Letter Queue: " + DLQ_ARN);
     System.out.println("Creating a new queue: " + TEST_QUEUE_NAME);
     
     try{
-      testQueueURL = createQueue(TEST_QUEUE_NAME);
+      testQueueURL = createQueue(TEST_QUEUE_NAME, DLQ_ARN);
       System.out.println("Created test queue with URL: " + testQueueURL);
     }catch( Exception e) {
       System.out.println("Exception cought while trying creating the test queue...");
@@ -52,7 +52,7 @@ public class QueueManager {
 
     final String TEST_MSG = "Test message number: " + System.currentTimeMillis();
 
-    System.out.println("Testing QueueManager class using queue: " + testQueueURL);
+    System.out.println("Using queue: " + testQueueURL);
     System.out.println("The following message will be written into the test queue...");
     System.out.println(TEST_MSG);
     
@@ -115,6 +115,27 @@ public class QueueManager {
                               CreateQueueRequest.builder()
                                 .queueName(queueName)
                                 .build())
+      .queueUrl();  
+  }
+  
+  /**
+   * Create a new queue
+   * 
+   * @param queueName Name of the queue to be created
+   * @param deadLetterQueueARN Dead-letter queue's ARN to be used
+   * @return The new queue's URL
+   * @throws Exception
+   */   
+  public static String createQueue(String queueName, String deadLetterQueueARN) throws Exception{
+    return buildClient().createQueue(
+                              CreateQueueRequest.builder()
+                                .queueName(queueName)
+                                       .attributes(new HashMap<QueueAttributeName, String>(){{
+                                          put(QueueAttributeName.REDRIVE_POLICY, 
+                                              "{\"maxReceiveCount\":\"5\", " + 
+                                              "\"deadLetterTargetArn\":\"" + 
+                                              deadLetterQueueARN + "\"}");}})
+                                       .build())
       .queueUrl();  
   }
 
