@@ -22,12 +22,12 @@ apply plugin: 'com.palantir.docker'
 
 dependencyManagement {
   imports {
-	  mavenBom 'software.amazon.awssdk:bom:2.0.0-preview-12'
+	  mavenBom 'software.amazon.awssdk:bom:2.1.0'
   }
 }
 
 bootJar {
-    baseName = 'heatmap-aws_consumer'
+    baseName = 'denis-map-test_aws_consumer'
     version =  '1.0.0'
 }
 
