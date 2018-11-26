@@ -115,7 +115,7 @@ public class Application {
         e.printStackTrace();
         System.exit(1);
       }
-      // Confirm subscription
+      // Confirm subscription when subscribing another account's queue
       /*try{    
         String confirSubscription = snsClient.confirmSubscription(ConfirmSubscriptionRequest.builder()
                                                                     .topicArn(SUPPLIER_TOPIC_ARN)
@@ -143,14 +143,14 @@ public class Application {
           String lines = msgs.stream()
             .map(Message::body)
             //***************** DEBUG      
-            .peek(System.out::println)
+            //.peek(System.out::println)
             //*****************
             .collect(joining("\n"));
           
           // Put the message into the clients' queues
           for (Map.Entry<String, BlockingQueue<String>> client : clients.entrySet()){
             //***************** DEBUG
-            System.out.println("MESSAGE BEING DELIVERED to client: " + client.getKey());
+            //System.out.println("MESSAGE BEING DELIVERED to client: " + client.getKey());
             //*****************
             if (!client.getValue().offer(lines)){
               System.out.println(client.getKey() + " client's queue is full. Received message discarded!");
