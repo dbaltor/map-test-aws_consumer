@@ -6,6 +6,7 @@
 
 package map;
 
+import javax.annotation.PreDestroy;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -20,58 +21,45 @@ import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.BinaryWebSocketHandler;
 
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.sns.SnsClient;
+import software.amazon.awssdk.services.sns.model.SubscribeRequest;
+import software.amazon.awssdk.services.sns.model.ConfirmSubscriptionRequest;
+import software.amazon.awssdk.services.sns.model.UnsubscribeRequest;
 import software.amazon.awssdk.services.sqs.model.Message;
 import qm.QueueManager;
 
 import static java.util.stream.Collectors.*;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.*;
 
 @EnableWebSocket
 @SpringBootApplication
 public class Application {
   
-    private static final String HEATMAP_QUEUE_URL = "https://sqs.eu-west-2.amazonaws.com/556385395922/heatmap-queue";
+    private static final String SUPPLIER_TOPIC_ARN = "arn:aws:sns:eu-west-2:556385395922:heatmap";  
     private static final String HEATMAP_SUPPLIER_URL = "https://sqs.eu-west-2.amazonaws.com/556385395922/heatmap-supplier";      
+    private static final String DLQ_ARN = "arn:aws:sqs:eu-west-2:556385395922:heatmap-dlq";
     private static final String DEFAULT_LOCATION_FILE = "./files/realtimelocation.csv";
-    private static String lab;
     private static String[] args;
+    private static String lab;
+    private static String subscriptionQueueURL;
+    private static String subscriptionArn;
     
     // Map of supplier's messages queue per client
-    private static final Map<String, BlockingQueue<String>> clients = new HashMap<>();
-
-    public static void main(String[] args) {
-        SpringApplication.run(Application.class, args);
-        
-        // start a thread to handle lab 1 messages received
-        new Thread(() -> {
-          List<Message> msgs;
-          
-          System.out.println("Heatspots will be read from the queue: " + HEATMAP_QUEUE_URL);
-          while(true){
-            // Poll the queue waiting for coordinates
-            msgs = QueueManager.get(HEATMAP_QUEUE_URL); 
-            if (msgs.isEmpty()) {
-              continue;
-            }
-            // Get messages received and concatenate them
-            String lines = msgs.stream()
-            .map(Message::body)
-//            .peek(System.out::println)
-            .collect(joining("\n"));
-            
-            // Put the message into the clients' queues
-            for (Map.Entry<String, BlockingQueue<String>> client : clients.entrySet()){
-              if (!client.getValue().offer(lines)){
-                System.out.println(client.getKey() + " client's queue is full. Received message discarded!");
-              }
-            }
-          }
-        }).start();
+    private static final Map<String, BlockingQueue<String>> clients = new ConcurrentHashMap<>();
+    
+    public static void main(String[] args)
+    {
+      SpringApplication.run(Application.class, args);
+      
+      subscribeSupplier();
     }
     
     @Bean
-    public CommandLineRunner commandLineRunner(ApplicationContext ctx) {
+    public CommandLineRunner commandLineRunner(ApplicationContext ctx) 
+    {
         return args -> {
           
           final String DEFAULT_LAB = "both";
@@ -89,13 +77,125 @@ public class Application {
               lab = DEFAULT_LAB; 
               System.out.println("Labs 1 and 2 selected");
           }
-
         };
     }
     
+//    private static final String HEATMAP_QUEUE_URL = "https://sqs.eu-west-2.amazonaws.com/556385395922/heatmap-queue";
+    // Subscribe the supplier topic
+    private static void subscribeSupplier()
+    {
+      final String SUBSCRIPTION_QUEUE_NAME = "heatmp-queue-" + System.currentTimeMillis();
+     
+      // Create Subscription queue for this consumer
+      try{
+        subscriptionQueueURL = QueueManager.createQueue(SUBSCRIPTION_QUEUE_NAME, DLQ_ARN, SUPPLIER_TOPIC_ARN);
+        System.out.println("Created Consumer's subscription queue with URL: " + subscriptionQueueURL);
+      }catch( Exception e) {
+        System.out.println("Exception caught while trying creating the subscription queue...");
+        e.printStackTrace();
+        System.exit(1);
+      }
+      // Build the SNS client
+      SnsClient snsClient = SnsClient.builder()
+        .region(Region.EU_WEST_2)
+        .build();     
+      // Subscribe the Supplier's topic
+      try{      
+        subscriptionArn = snsClient.subscribe(SubscribeRequest.builder()
+                                                .topicArn(SUPPLIER_TOPIC_ARN)
+                                                .protocol("sqs")
+                                                .endpoint(QueueManager.getQueueARN(subscriptionQueueURL))
+                                                .attributes(new HashMap<String,String>(){{
+                                                    put("RawMessageDelivery", "true");}})
+                                                .build())
+          .subscriptionArn();
+        System.out.println("Subscription created... " + subscriptionArn);
+      }catch( Exception e) {
+        System.out.println("Exception caught while trying to subscribe the topic...");
+        e.printStackTrace();
+        System.exit(1);
+      }
+      // Confirm subscription when subscribing another account's queue
+      /*try{    
+        String confirSubscription = snsClient.confirmSubscription(ConfirmSubscriptionRequest.builder()
+                                                                    .topicArn(SUPPLIER_TOPIC_ARN)
+                                                                    .token(subscriptionArn)
+                                                                    .build())
+          .subscriptionArn();
+        System.out.println("Subscription confirmed... " + confirSubscription);
+      }catch( Exception e) {
+        System.out.println("Exception caught while trying to confirm the subscription...");
+        e.printStackTrace();
+        System.exit(1);
+      } */     
+     
+      // start a thread to handle lab 1 messages received
+      new Thread(() -> {
+        List<Message> msgs;
+        
+        while(true){
+          // Poll the queue waiting for coordinates
+          msgs = QueueManager.get(subscriptionQueueURL); 
+          if (msgs.isEmpty()) {
+            continue;
+          }
+          // Get messages received and concatenate them
+          String lines = msgs.stream()
+            .map(Message::body)
+            //***************** DEBUG      
+            //.peek(System.out::println)
+            //*****************
+            .collect(joining("\n"));
+          
+          // Put the message into the clients' queues
+          for (Map.Entry<String, BlockingQueue<String>> client : clients.entrySet()){
+            //***************** DEBUG
+            //System.out.println("MESSAGE BEING DELIVERED to client: " + client.getKey());
+            //*****************
+            if (!client.getValue().offer(lines)){
+              System.out.println(client.getKey() + " client's queue is full. Received message discarded!");
+            }
+          }
+        }
+      }).start();      
+    }
+      
+    // Register a shutdown hook with the JVM
+    @PreDestroy
+    public static void unsubscribeSupplier()
+    {
+      // Remove the subscription and queue
+      System.out.println("TEAR DOWN!!!!!!");
+      
+      // Build the SNS client
+      SnsClient snsClient = SnsClient.builder()
+        .region(Region.EU_WEST_2)
+        .build();     
+      // Unsubscribe the Supplier's topic
+      try{      
+        snsClient.unsubscribe(UnsubscribeRequest.builder()
+                              .subscriptionArn(subscriptionArn)
+                              .build());
+        System.out.println("Subscription deleted... " + subscriptionArn);
+      }catch( Exception e) {
+        System.out.println("Exception caught while trying to unsubscribe the topic...");
+        e.printStackTrace();
+        System.exit(1);
+      }
+      // Delete Subscription queue for this consumer
+      try{
+        QueueManager.deleteQueue(subscriptionQueueURL);
+        System.out.println("Deleted queue: " + subscriptionQueueURL);
+      }catch( Exception e) {
+        System.out.println("Exception caught while trying deleting the subscription queue...");
+        e.printStackTrace();
+        System.exit(1);
+      }
+    }    
+    
     @Component
-    public static class MyWebSocketConfigurer implements WebSocketConfigurer {
-
+    public static class MyWebSocketConfigurer implements WebSocketConfigurer 
+    {
         @Override
         public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
             registry.addHandler(new MyBinaryHandler(), "/lab");
@@ -103,9 +203,16 @@ public class Application {
     }
     
     @Component
-    public static class MyBinaryHandler extends BinaryWebSocketHandler {
-
-      public void afterConnectionEstablished(WebSocketSession session) {
+    public static class MyBinaryHandler extends BinaryWebSocketHandler 
+    {
+      public void afterConnectionEstablished(WebSocketSession session)
+      {
+        // Send map access key
+        System.out.println("Trying to send the map access key: " + System.getenv("MAPKEY"));
+        if (!WsPacket.send(session, "m0," + System.getenv("MAPKEY"))){
+          System.out.println("Error whilst trying to send map access key. Socket " + session.getId() + " closed!");
+          return; 
+        }
         if (lab.equals("1") || lab.equals("both")) {
           try {
             // Send start command to supplier
@@ -114,7 +221,7 @@ public class Application {
             new Lab1(session, clients);
           }
           catch( Exception e) {
-            System.out.println("Exception cought while trying to write into the queue: " + HEATMAP_SUPPLIER_URL);
+            System.out.println("Exception caught while trying to write into the queue: " + HEATMAP_SUPPLIER_URL);
             e.printStackTrace();
           }          
         }

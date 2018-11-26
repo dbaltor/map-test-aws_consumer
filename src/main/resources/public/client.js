@@ -7,7 +7,7 @@
 
 	var colors = ['#ff0000', '#ffff00', '#00ff00'];
 	
-	window.onload = function() {
+	/* window.onload = function() {
 		//Add your Unwired Maps Access Token here (not the API token!)
 		//var unwired;
 		unwired.key = mapboxgl.accessToken = 'xyz';
@@ -18,9 +18,8 @@
 			style: unwired.getLayer("streets"), //get Unwired's style template
 			zoom: 7,
 			center: [-1.3402795, 52.0601807] 	// Banbury
-//			center: [-0.213736,51.523524]		// London
 		});
-	}
+	}*/
 	
 	socket.onopen = function() {
 		log('Opened connection');
@@ -47,7 +46,20 @@
 			return;			
 		
 		var messageType = fields[0];
-		if (messageType == 'm1') { //LAB 1 message received
+		if (messageType == 'm0') { // Config Map token
+			//Add your Unwired Maps Access Token here (not the API token!)
+			unwired.key = mapboxgl.accessToken = fields[1];
+			//Define the map and configure the map's theme
+			map = new mapboxgl.Map({
+				container: 'map',
+				attributionControl: false, //need this to show a compact attribution icon (i) instead of the whole text
+				style: unwired.getLayer("streets"), //get Unwired's style template
+				zoom: 6,
+				center: [-1.510477, 52.4081812] 	// Coventry
+	//			center: [-0.213736,51.523524]		// London
+			});
+		}			
+		else if (messageType == 'm1') { //LAB 1 message received
 			var keyMarker = fields[1] + fields[2];
 
 			if (lab1markers.has(keyMarker)){

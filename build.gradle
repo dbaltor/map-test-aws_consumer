@@ -38,10 +38,12 @@ repositories {
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
-
 dependencies {
 	compile 'software.amazon.awssdk:sns'
 	compile 'software.amazon.awssdk:sqs'
+	//compile group: 'software.amazon.awssdk', name: 'auth'
+	//compile group: 'software.amazon.awssdk', name: 'sdk-core'
+	//compile group: 'software.amazon.awssdk', name: 'aws-core'	
 	testCompile group: 'junit', name: 'junit', version: '4.11'
 	// compile("org.springframework.boot:spring-boot-devtools")
     compile("org.springframework.boot:spring-boot-starter-web")

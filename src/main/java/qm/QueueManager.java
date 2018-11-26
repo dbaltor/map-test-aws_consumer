@@ -1,5 +1,10 @@
 package qm;
 
+//import software.amazon.awssdk.core.auth.policy.Policy;
+/*import software.amazon.awssdk.core.auth.policy.Statement;
+import software.amazon.awssdk.core.auth.policy.Statement.Effect;
+import software.amazon.awssdk.core.auth.policy.Principal;
+import software.amazon.awssdk.services.iot.model.SqsAction;*/
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sqs.SqsClient;
@@ -11,6 +16,8 @@ import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
 import software.amazon.awssdk.services.sqs.model.DeleteMessageRequest;
 import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
+import software.amazon.awssdk.services.sqs.model.GetQueueAttributesRequest;
+import software.amazon.awssdk.services.sqs.model.SetQueueAttributesRequest;
 
 import java.util.*;
 
@@ -42,14 +49,26 @@ public class QueueManager {
       testQueueURL = createQueue(TEST_QUEUE_NAME, DLQ_ARN);
       System.out.println("Created test queue with URL: " + testQueueURL);
     }catch( Exception e) {
-      System.out.println("Exception cought while trying creating the test queue...");
+      System.out.println("Exception caught while trying creating the test queue...");
       e.printStackTrace();
       System.exit(1);
     }
     
     System.out.println("Press ENTER...");
     sc.nextLine();
+ 
+ 
+    try{
+      System.out.println("ARN of the newly created queue: " + getQueueARN(testQueueURL));
+    }catch(Exception e) {
+      System.out.println("Exception caught while trying enquiring the queue's ARN...");
+      e.printStackTrace();
+      System.exit(1);
+    }
 
+    System.out.println("Press ENTER...");
+    sc.nextLine();
+ 
     final String TEST_MSG = "Test message number: " + System.currentTimeMillis();
 
     System.out.println("Using queue: " + testQueueURL);
@@ -59,7 +78,7 @@ public class QueueManager {
     try {
       put(testQueueURL, TEST_MSG);
     }catch( Exception e) {
-      System.out.println("Exception cought while trying writing into the test queue...");
+      System.out.println("Exception caught while trying writing into the test queue...");
       e.printStackTrace();
       System.exit(1);
     }
@@ -80,7 +99,7 @@ public class QueueManager {
       deleteQueue(testQueueURL);
       System.out.println("Deleted queue: " + TEST_QUEUE_NAME);
     }catch( Exception e) {
-      System.out.println("Exception cought while trying deleting the test queue...");
+      System.out.println("Exception caught while trying deleting the test queue...");
       e.printStackTrace();
       System.exit(1);
     }
@@ -98,7 +117,8 @@ public class QueueManager {
   */
   private static SqsClient buildClient() {
     // Build a SQS service client
-    return SqsClient.builder()
+    return SqsClient
+      .builder()
       .region(Region.EU_WEST_2)
       .build();      
   }
@@ -111,15 +131,16 @@ public class QueueManager {
    * @throws Exception
    */    
   public static String createQueue(String queueName) throws Exception{
-    return buildClient().createQueue(
-                              CreateQueueRequest.builder()
-                                .queueName(queueName)
-                                .build())
+    return buildClient()
+      .createQueue(CreateQueueRequest
+                     .builder()
+                     .queueName(queueName)
+                     .build())
       .queueUrl();  
   }
   
   /**
-   * Create a new queue
+   * Create a new queue with an associated dead-letter queue
    * 
    * @param queueName Name of the queue to be created
    * @param deadLetterQueueARN Dead-letter queue's ARN to be used
@@ -127,16 +148,83 @@ public class QueueManager {
    * @throws Exception
    */   
   public static String createQueue(String queueName, String deadLetterQueueARN) throws Exception{
-    return buildClient().createQueue(
-                              CreateQueueRequest.builder()
-                                .queueName(queueName)
-                                       .attributes(new HashMap<QueueAttributeName, String>(){{
-                                          put(QueueAttributeName.REDRIVE_POLICY, 
-                                              "{\"maxReceiveCount\":\"5\", " + 
-                                              "\"deadLetterTargetArn\":\"" + 
-                                              deadLetterQueueARN + "\"}");}})
-                                       .build())
+    return buildClient()
+      .createQueue(CreateQueueRequest
+                     .builder()
+                     .queueName(queueName)
+                     .attributes(new HashMap<QueueAttributeName, String>(){{
+      put(QueueAttributeName.REDRIVE_POLICY, 
+          "{\"maxReceiveCount\":\"5\", " + 
+          "\"deadLetterTargetArn\":\"" + 
+          deadLetterQueueARN + "\"}");}})
+                     .build())
       .queueUrl();  
+  }
+
+  /**
+   * Create a new queue with associated dead-letter queue and pub/sub topic
+   * 
+   * @param queueName Name of the queue to be created
+   * @param deadLetterQueueARN Dead-letter queue's ARN to be used
+   * @param topicARN
+   * @return The new queue's URL
+   * @throws Exception
+   */   
+  public static String createQueue(String queueName, String deadLetterQueueARN, String topicARN) throws Exception
+  {
+    SqsClient sqsClient = buildClient();
+    String queueUrl = sqsClient
+      .createQueue(CreateQueueRequest
+                     .builder()
+                     .queueName(queueName)
+                     .build())
+      .queueUrl();
+    final String queueARN = sqsClient    
+      .getQueueAttributes(GetQueueAttributesRequest
+                            .builder()
+                            .queueUrl(queueUrl)
+                            .attributeNames(QueueAttributeName.QUEUE_ARN)
+                            .build())
+      .attributes().get(QueueAttributeName.QUEUE_ARN);
+    sqsClient.setQueueAttributes(
+                                 SetQueueAttributesRequest
+                                   .builder()
+                                   .queueUrl(queueUrl)
+                                   .attributes(
+                                               new HashMap<QueueAttributeName, String>(){{
+      put(QueueAttributeName.REDRIVE_POLICY, 
+          "{\"maxReceiveCount\":\"5\", " + 
+          "\"deadLetterTargetArn\":\"" + 
+          deadLetterQueueARN + "\"}");
+      put(QueueAttributeName.POLICY,
+          "{\"Statement\": [{" +
+          "\"Effect\": \"Allow\", " +
+          "\"Principal\": {\"AWS\": \"*\"}," +
+          "\"Action\": \"SQS:SendMessage\", " +
+          "\"Resource\": \"" + queueARN + "\"," +
+          "\"Condition\": {" +
+          "\"ArnEquals\": {\"aws:SourceArn\": \"" + topicARN + "\"}" +
+          "}" +
+          "}]}");}})
+                                   .build());
+    return queueUrl;
+  }  
+  
+  /**
+   * Get the queue's ARN
+   * 
+   * @param queueUrl URL of the queue to enquire
+   * @return The queue's ARN
+   * @throws Exception
+   */ 
+  public static String getQueueARN(String queueUrl) throws Exception
+  {
+    return buildClient()
+      .getQueueAttributes(GetQueueAttributesRequest.builder()
+                            .queueUrl(queueUrl)
+                            .attributeNames(QueueAttributeName.QUEUE_ARN)
+                            .build())
+      .attributes().get(QueueAttributeName.QUEUE_ARN);
   }
 
   /**
@@ -146,13 +234,12 @@ public class QueueManager {
    * @throws Exception
    */     
   public static void deleteQueue(String queueUrl) throws Exception{
-    buildClient().deleteQueue(
-                              DeleteQueueRequest.builder()
-                                .queueUrl(queueUrl)
-                                .build());
+    buildClient()
+      .deleteQueue(
+                   DeleteQueueRequest.builder()
+                     .queueUrl(queueUrl)
+                     .build());
   }
-  
-
   
   /**
    * Put the given message into the queue provided
@@ -163,10 +250,11 @@ public class QueueManager {
    * @throws Exception
    */  
   public static String put(String queueUrl, String messageBody) throws Exception{
-    return buildClient().sendMessage(SendMessageRequest.builder()
-                                   .queueUrl(queueUrl)
-                                   .messageBody(messageBody)
-                                   .build())
+    return buildClient()
+      .sendMessage(SendMessageRequest.builder()
+                     .queueUrl(queueUrl)
+                     .messageBody(messageBody)
+                     .build())
       .messageId();    
   }
  
@@ -180,11 +268,12 @@ public class QueueManager {
    * @throws Exception
    */   
   public static String put(String queueUrl, String messageBody, Integer delaySeconds) throws Exception{ 
-    return buildClient().sendMessage(SendMessageRequest.builder()
-                                   .queueUrl(queueUrl)
-                                   .messageBody(messageBody)
-                                   .delaySeconds(delaySeconds)
-                                   .build())
+    return buildClient()
+      .sendMessage(SendMessageRequest.builder()
+                     .queueUrl(queueUrl)
+                     .messageBody(messageBody)
+                     .delaySeconds(delaySeconds)
+                     .build())
       .messageId();
   }
   
@@ -229,7 +318,8 @@ public class QueueManager {
     SqsClient sqsClient = buildClient();
     
     // long poll the queue for <waitTimeSeconds> seconds to read up to <maxNumberOfMessages> messages
-    ReceiveMessageRequest receiveMessageRequest = ReceiveMessageRequest.builder()
+    ReceiveMessageRequest receiveMessageRequest = ReceiveMessageRequest
+      .builder()
       .queueUrl(queueUrl)
       .maxNumberOfMessages(maxNumberOfMessages)
       .waitTimeSeconds(waitTimeSeconds)
@@ -240,7 +330,8 @@ public class QueueManager {
 
     // delete from the queue all messages read
     for (Message message : messages) {
-      DeleteMessageRequest deleteMessageRequest = DeleteMessageRequest.builder()
+      DeleteMessageRequest deleteMessageRequest = DeleteMessageRequest
+        .builder()
         .queueUrl(queueUrl)
         .receiptHandle(message.receiptHandle())
         .build();
