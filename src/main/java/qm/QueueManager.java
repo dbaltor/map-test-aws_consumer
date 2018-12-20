@@ -8,10 +8,12 @@ import software.amazon.awssdk.services.iot.model.SqsAction;*/
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.SqsAsyncClient;
 import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
 import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
+import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
 import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.DeleteQueueRequest;
 import software.amazon.awssdk.services.sqs.model.DeleteMessageRequest;
@@ -20,6 +22,7 @@ import software.amazon.awssdk.services.sqs.model.GetQueueAttributesRequest;
 import software.amazon.awssdk.services.sqs.model.SetQueueAttributesRequest;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 /************************************************************************\
  * Utility class to interact with AWS Simple Queue Service (SQS)
@@ -68,8 +71,11 @@ public class QueueManager {
 
     System.out.println("Press ENTER...");
     sc.nextLine();
+    
+    System.out.println("Testing SYNCHRONOUS API...");
+    System.out.println("==========================");
  
-    final String TEST_MSG = "Test message number: " + System.currentTimeMillis();
+    String TEST_MSG = "Test message number: " + System.currentTimeMillis();
 
     System.out.println("Using queue: " + testQueueURL);
     System.out.println("The following message will be written into the test queue...");
@@ -95,6 +101,42 @@ public class QueueManager {
     System.out.println("Press ENTER...");
     sc.nextLine();
     
+    System.out.println("Testing ASYNCHRONOUS API...");
+    System.out.println("===========================");    
+    
+    TEST_MSG = "Test message number: " + System.currentTimeMillis();
+
+    System.out.println("Using queue: " + testQueueURL);
+    System.out.println("The following message will be written into the test queue...");
+    System.out.println(TEST_MSG);
+    
+    try {
+      put(testQueueURL, TEST_MSG);
+    }catch( Exception e) {
+      System.out.println("Exception caught while trying writing into the test queue...");
+      e.printStackTrace();
+      System.exit(1);
+    }
+    
+    System.out.println("Press ENTER...");
+    sc.nextLine();
+    
+    System.out.println("The following messages have been ASYNCHRONOUSLY read from the test queue...");
+    try{
+      getAsync(testQueueURL)
+        .get()
+        .stream()
+        .map(msg -> msg.body())
+        .forEach(System.out::println);
+    }catch( Exception e) {
+      System.out.println("Exception caught while awaiting for the future to complete...");
+      e.printStackTrace();
+      System.exit(1);
+    }
+    
+    System.out.println("Press ENTER...");
+    sc.nextLine();    
+    
     try{
       deleteQueue(testQueueURL);
       System.out.println("Deleted queue: " + TEST_QUEUE_NAME);
@@ -111,17 +153,29 @@ public class QueueManager {
   }
   
   /**
-   * Build a SQS client using London region
+   * Build a synchronous SQS client
    * 
-   * @return The client built
+   * @return the client built
   */
   private static SqsClient buildClient() {
     // Build a SQS service client
     return SqsClient
       .builder()
-      .region(Region.EU_WEST_2)
+//      .region(Region.EU_WEST_2)
       .build();      
   }
+  
+  /**
+   * Build an asynchronous SQS client
+   * 
+   * @return the client built
+  */
+  private static SqsAsyncClient buildAsyncClient() {
+    // Build a SQS service client
+    return SqsAsyncClient
+      .builder()
+      .build();      
+  }  
   
   /**
    * Create a new queue
@@ -318,26 +372,93 @@ public class QueueManager {
     SqsClient sqsClient = buildClient();
     
     // long poll the queue for <waitTimeSeconds> seconds to read up to <maxNumberOfMessages> messages
-    ReceiveMessageRequest receiveMessageRequest = ReceiveMessageRequest
-      .builder()
-      .queueUrl(queueUrl)
-      .maxNumberOfMessages(maxNumberOfMessages)
-      .waitTimeSeconds(waitTimeSeconds)
-      .attributeNames(QueueAttributeName.ALL)
-      .build();
-    
-    List<Message> messages = sqsClient.receiveMessage(receiveMessageRequest).messages();
+    List<Message> messages = sqsClient.receiveMessage(
+                                                      ReceiveMessageRequest
+                                                        .builder()
+                                                        .queueUrl(queueUrl)
+                                                        .maxNumberOfMessages(maxNumberOfMessages)
+                                                        .waitTimeSeconds(waitTimeSeconds)
+                                                        .attributeNames(QueueAttributeName.ALL)
+                                                        .build())
+      .messages();
 
     // delete from the queue all messages read
     for (Message message : messages) {
-      DeleteMessageRequest deleteMessageRequest = DeleteMessageRequest
-        .builder()
-        .queueUrl(queueUrl)
-        .receiptHandle(message.receiptHandle())
-        .build();
-      sqsClient.deleteMessage(deleteMessageRequest);
+      sqsClient.deleteMessage(
+                              DeleteMessageRequest
+                                .builder()
+                                .queueUrl(queueUrl)
+                                .receiptHandle(message.receiptHandle())
+                                .build());
     }
     
     return messages;
   }
+  
+  /**
+   * Asynchronously retrieve up to 5 messages from the queue provided.
+   * The queue will be polled up to 20 seconds.
+   * All message attributes will be retrieved.
+   * 
+   * @param queueUrl Target queue's URL
+   * @return A completable future of the list of messages to be retrieved
+   */   
+  public static CompletableFuture<List<Message>> getAsync(String queueUrl) {
+    // long poll the queue for 20 seconds to read up to 5 messages
+    return getAsync(queueUrl, 5, 20);    
+  }
+  
+  /**
+   * Asynchronously retrieve up to the specified number of messages from the queue provided.
+   * The queue will be polled up to 20 seconds.
+   * All message attributes will be retrieved.
+   * 
+   * @param queueUrl Target queue's URL
+   * @param maxNumberOfMessages maximum number of messages to be retrieved
+   * @return A completable future of the list of messages to be retrieved
+   */   
+  public static CompletableFuture<List<Message>> getAsync(String queueUrl, int maxNumberOfMessages) {
+    // long poll the queue for 20 seconds to read up to <maxNumberOfMessages> messages
+    return getAsync(queueUrl, maxNumberOfMessages, 20);
+  }  
+  
+  /**
+   * Asynchronously retrieve up to the specified number of messages from the queue provided
+   * The queue will be polled up to the specified amount of time.
+   * All message attributes will be retrieved.
+   * 
+   * @param queueUrl Target queue's URL
+   * @param maxNumberOfMessages maximum number of messages to be retrieved
+   * @param waitTimeSeconds maximum number of seconds to wait
+   * @return A completable future of the list of messages to be retrieved
+   */  
+  public static CompletableFuture<List<Message>> getAsync(String queueUrl, int maxNumberOfMessages, int waitTimeSeconds) {
+    // long poll the queue for <waitTimeSeconds> seconds to read up to <maxNumberOfMessages> messages
+    CompletableFuture<ReceiveMessageResponse> response = buildAsyncClient()
+      .receiveMessage(
+                      ReceiveMessageRequest
+                        .builder()
+                        .queueUrl(queueUrl)
+                        .maxNumberOfMessages(maxNumberOfMessages)
+                        .waitTimeSeconds(waitTimeSeconds)
+                        .attributeNames(QueueAttributeName.ALL)
+                        .build());
+    
+    CompletableFuture<List<Message>> messages = response.thenApply(ReceiveMessageResponse::messages);
+
+    // delete from the queue all messages read
+    SqsClient sqsClient = buildClient();
+    messages.thenAccept(msgs -> {
+      for (Message message : msgs) {
+        sqsClient.deleteMessage(
+                                DeleteMessageRequest
+                                  .builder()
+                                  .queueUrl(queueUrl)
+                                  .receiptHandle(message.receiptHandle())
+                                  .build());
+      }
+    });
+    
+    return messages;
+  }  
 }
