@@ -43,11 +43,13 @@ public class QueueManager {
    */
   public static void main(String[] args) {
     Scanner sc = new Scanner(System.in);
-    String testQueueURL = "";
+   
     System.out.println("Testing QueueManager...");
     System.out.println("Using Dead Letter Queue: " + DLQ_ARN);
+    System.out.println("==============================================================");
     System.out.println("Creating a new queue: " + TEST_QUEUE_NAME);
     
+    String testQueueURL = "";
     try{
       testQueueURL = createQueue(TEST_QUEUE_NAME, DLQ_ARN);
       System.out.println("Created test queue with URL: " + testQueueURL);
@@ -57,7 +59,7 @@ public class QueueManager {
       System.exit(1);
     }
     
-    System.out.println("Press ENTER...");
+    System.out.println("Thread " + Thread.currentThread().getName() + ": Press ENTER...");
     sc.nextLine();
  
  
@@ -69,77 +71,88 @@ public class QueueManager {
       System.exit(1);
     }
 
-    System.out.println("Press ENTER...");
+    System.out.println("Thread " + Thread.currentThread().getName() + ": Press ENTER...");
     sc.nextLine();
     
     System.out.println("Testing SYNCHRONOUS API...");
     System.out.println("==========================");
  
-    String TEST_MSG = "Test message number: " + System.currentTimeMillis();
+    String test_msg = "Test message number: " + System.currentTimeMillis();
 
     System.out.println("Using queue: " + testQueueURL);
     System.out.println("The following message will be written into the test queue...");
-    System.out.println(TEST_MSG);
+    System.out.println(test_msg);
     
     try {
-      put(testQueueURL, TEST_MSG);
+      put(testQueueURL, test_msg);
+      System.out.println("Done!");
     }catch( Exception e) {
       System.out.println("Exception caught while trying writing into the test queue...");
       e.printStackTrace();
       System.exit(1);
     }
     
-    System.out.println("Press ENTER...");
+    System.out.println("Thread " + Thread.currentThread().getName() + ": Press ENTER...");
     sc.nextLine();
     
-    System.out.println("The following messages have been read from the test queue...");
+    System.out.println("The following messages will be read from the test queue...");
     get(testQueueURL) 
       .stream()
       .map(msg -> msg.body())
       .forEach(System.out::println);
     
-    System.out.println("Press ENTER...");
+    System.out.println("Done!");
+    System.out.println("Thread " + Thread.currentThread().getName() + ": Press ENTER...");
     sc.nextLine();
     
+    System.out.println();
     System.out.println("Testing ASYNCHRONOUS API...");
     System.out.println("===========================");    
     
-    TEST_MSG = "Test message number: " + System.currentTimeMillis();
+    test_msg = "Test message number: " + System.currentTimeMillis();
 
     System.out.println("Using queue: " + testQueueURL);
     System.out.println("The following message will be written into the test queue...");
-    System.out.println(TEST_MSG);
+    System.out.println(test_msg);
     
     try {
-      put(testQueueURL, TEST_MSG);
+      put(testQueueURL, test_msg);
+      System.out.println("Done!");
     }catch( Exception e) {
       System.out.println("Exception caught while trying writing into the test queue...");
       e.printStackTrace();
       System.exit(1);
     }
-    
-    System.out.println("Press ENTER...");
+
+    System.out.println("Thread " + Thread.currentThread().getName() + ": Press ENTER...");
     sc.nextLine();
     
-    System.out.println("The following messages have been ASYNCHRONOUSLY read from the test queue...");
-    try{
-      getAsync(testQueueURL)
-        .get()
-        .stream()
-        .map(msg -> msg.body())
-        .forEach(System.out::println);
-    }catch( Exception e) {
-      System.out.println("Exception caught while awaiting for the future to complete...");
-      e.printStackTrace();
-      System.exit(1);
-    }
+    System.out.println("The following messages will be ASYNCHRONOUSLY read from the test queue...");
+
+    final String TEST_QUEUE_URL = testQueueURL;
+    getAsync(TEST_QUEUE_URL).whenComplete((msgs, err) -> {
+      if (msgs != null) {
+        msgs.stream()
+          .map(msg -> msg.body())
+          .forEach(System.out::println);
+        
+        System.out.println("Done!");
+        System.out.println("Thread " + Thread.currentThread().getName() + ": Press ENTER...");
+        sc.nextLine();    
+      } else {
+        // Handle error
+        err.printStackTrace();
+        System.exit(1);
+      }
+    }).join(); // wait for the future to complete
     
-    System.out.println("Press ENTER...");
-    sc.nextLine();    
-    
     try{
+      System.out.println("Will delete the new queue: " + TEST_QUEUE_NAME);
+      System.out.println("Thread " + Thread.currentThread().getName() + ": Press ENTER...");
+      sc.nextLine();
+      
       deleteQueue(testQueueURL);
-      System.out.println("Deleted queue: " + TEST_QUEUE_NAME);
+      System.out.println("Done!");      
     }catch( Exception e) {
       System.out.println("Exception caught while trying deleting the test queue...");
       e.printStackTrace();
@@ -149,7 +162,7 @@ public class QueueManager {
     System.out.println();
     System.out.println("*******************");
     System.out.println("ALL TESTS PASSED!!!");
-    System.out.println("*******************");
+    System.out.println("*******************");    
   }
   
   /**
