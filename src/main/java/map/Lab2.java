@@ -1,6 +1,7 @@
 package map;
 
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
 import java.io.*;
 import java.time.LocalTime;
 import java.util.concurrent.TimeUnit;
@@ -49,8 +50,7 @@ class Lab2 extends Thread {
    
    public void run() {
      
-     String[] vehicles = new String[maxVehicles];
-     int stored_vehicles = 0;
+     List<String> vehicles = new ArrayList(maxVehicles);
      int vehicles_to_send = maxVehicles;
      String last_time = "";     
      
@@ -67,17 +67,17 @@ class Lab2 extends Thread {
          String msg2send = "m2," + vehicle + "," + lat + "," + longi;
          
          // add current vehicle to the to send list
-         if (stored_vehicles < maxVehicles && !Arrays.asList(vehicles).contains(vehicle)) {
-           vehicles[stored_vehicles++] = vehicle;
+         if (vehicles.size() < maxVehicles && !vehicles.contains(vehicle)) {
+           vehicles.add(vehicle);
          }
 
          // PICK ONE VEHICLE UP
          /*   if (vehicle.equals("Vehicle_847")) {
-           vehicles[stored_vehicles++] = vehicle;
+            vehicles.add(vehicle);
          }*/
    
          //  vehicle listed to send
-         if (Arrays.asList(vehicles).contains(vehicle)) {
+         if (vehicles.contains(vehicle)) {
            // MAX_VEHICLES not exceeded 
            if (vehicles_to_send > 0) {
              // send message
