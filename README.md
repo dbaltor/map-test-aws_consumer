@@ -2,6 +2,7 @@
 Test map application developed with Spring Boot and AWS SQS (Simple Queue Service) and SNS (Simple Notification Service).
 <br>MAP_KEY environment variable must be set with the LocationIQ map token.
 <br>
+<br>
 <img src="Architecture.PNG"> 
 <br>
 A small application that updates the UK map based on 2 independent continuous streams of events: 
