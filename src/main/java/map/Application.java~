@@ -208,8 +208,8 @@ public class Application {
       public void afterConnectionEstablished(WebSocketSession session)
       {
         // Send map access key
-        System.out.println("Trying to send the map access key: " + System.getenv("MAPKEY"));
-        if (!WsPacket.send(session, "m0," + System.getenv("MAPKEY"))){
+        System.out.println("Trying to send the map access key (MAP_KEY): " + System.getenv("MAP_KEY"));
+        if (!WsPacket.send(session, "m0," + System.getenv("MAP_KEY"))){
           System.out.println("Error whilst trying to send map access key. Socket " + session.getId() + " closed!");
           return; 
         }

@@ -80,7 +80,6 @@ public class Application {
         };
     }
     
-//    private static final String HEATMAP_QUEUE_URL = "https://sqs.eu-west-2.amazonaws.com/556385395922/heatmap-queue";
     // Subscribe the supplier topic
     private static void subscribeSupplier()
     {
